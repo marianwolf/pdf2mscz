@@ -1,7 +1,7 @@
 # pdf2mscz
 
 [![PyPI](https://img.shields.io/pypi/v/pdf2mscz.svg)](https://pypi.org/project/pdf2mscz/)
-[![CI](https://github.com/marianux/pdf2mscz/actions/workflows/ci.yml/badge.svg)](https://github.com/marianux/pdf2mscz/actions/workflows/ci.yml)
+[![CI](https://github.com/marianwolf/pdf2mscz/actions/workflows/ci.yml/badge.svg)](https://github.com/marianwolf/pdf2mscz/actions/workflows/ci.yml)
 
 Convert sheet-music scans (**PDF / PNG / JPG**) into editable **MuseScore (`.mscz`)** and **MusicXML** using a modular multi-provider pipeline: classical open-source OMR (`oemer`) + vision LLMs (OpenAI, Anthropic, Gemini, NVIDIA, Ollama).
 

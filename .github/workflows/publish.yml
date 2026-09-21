@@ -1,8 +1,5 @@
 name: Publish
 
-# Publishes to PyPI via Trusted Publishing (OIDC) — no API token in the
-# repo. One-time setup on pypi.org: Add project → Trusted Publisher with
-# owner=marianux, repo=pdf2mscz, workflow=publish.yml, environment=pypi.
 on:
   push:
     tags: ["v*"]
