@@ -25,7 +25,9 @@ dependencies = [
   "pydantic-settings>=2.0",
   "pypdfium2>=4.0",
   "pillow>=10.0",
-  "opencv-python>=4.8",
+  # OpenCV 5 changed cv2.HoughLinesP to return (N, 4) instead of (N, 1, 4),
+  # which crashes oemer's bbox.find_lines with "invalid index to scalar variable".
+  "opencv-python>=4.8,<5",
   "numpy>=1.24",
   "lxml>=5.0",
   "python-dotenv>=1.0",
@@ -36,7 +38,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-oemer = ["oemer>=0.0.9"]
+oemer = ["oemer>=0.0.9", "opencv-python-headless>=4.8,<5"]
 dev = ["pytest>=8.0", "ruff>=0.3", "mypy>=1.8"]
 all = ["pdf2mscz[oemer]", "ollama>=0.2"]
 

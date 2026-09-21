@@ -3,6 +3,7 @@
 from pdf2mscz.converters import (  # noqa: F401 — registration side effects
     anthropic_provider,
     gemini_provider,
+    nvidia_provider,
     oemer_provider,
     ollama_provider,
     openai_provider,

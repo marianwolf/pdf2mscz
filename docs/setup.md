@@ -23,6 +23,7 @@ pip install -e ".[dev]"
 cp .env.example .env
 # edit .env, or export:
 export OPENAI_API_KEY=sk-...
+export NVIDIA_API_KEY=nvapi-...   # from build.nvidia.com
 ```
 3
 ## MuseScore CLI

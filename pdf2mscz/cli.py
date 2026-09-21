@@ -23,6 +23,7 @@ def _resolve_key(provider: str, cli_key: str | None) -> str | None:
         "openai": "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
         "gemini": ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+        "nvidia": "NVIDIA_API_KEY",
         "ollama": None,
         "oemer": None,
     }

@@ -7,7 +7,9 @@ from pdf2mscz.converters.base import AbstractProvider, ConversionResult, Provide
 
 
 def test_registry_lists_all_providers():
-    assert {"openai", "anthropic", "gemini", "ollama", "oemer"} <= set(available_providers())
+    assert {"openai", "anthropic", "gemini", "ollama", "oemer", "nvidia"} <= set(
+        available_providers()
+    )
 
 
 def test_unknown_provider_raises():
@@ -32,6 +34,26 @@ def test_fake_provider_contract():
     cls = get_provider_class("test-fake")
     out = cls(ProviderConfig()).image_to_musicxml([Image.new("RGB", (8, 8))])
     assert "score-partwise" in out.musicxml
+
+
+def test_nvidia_missing_key_gives_helpful_error(monkeypatch):
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+    cls = get_provider_class("nvidia")
+    try:
+        cls(ProviderConfig()).image_to_musicxml([Image.new("RGB", (8, 8))])
+    except ValueError as exc:
+        assert "NVIDIA_API_KEY" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for missing key")
+
+
+def test_nvidia_defaults_to_openai_compatible_nim_endpoint():
+    from pdf2mscz.converters.nvidia_provider import NIM_BASE_URL
+
+    provider = get_provider_class("nvidia")(ProviderConfig(api_key="nvapi-test"))
+    assert provider.config.api_key == "nvapi-test"
+    assert NIM_BASE_URL.startswith("https://")
+    assert get_provider_class("nvidia").supports_refinement()
 
 
 def test_oemer_missing_binary_gives_helpful_error(monkeypatch):

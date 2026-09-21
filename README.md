@@ -1,6 +1,6 @@
 # pdf2mscz
 
-Convert sheet-music scans (**PDF / PNG / JPG**) into editable **MuseScore (`.mscz`)** and **MusicXML** using a modular multi-provider pipeline: classical open-source OMR (`oemer`) + vision LLMs (OpenAI, Anthropic, Gemini, Ollama).
+Convert sheet-music scans (**PDF / PNG / JPG**) into editable **MuseScore (`.mscz`)** and **MusicXML** using a modular multi-provider pipeline: classical open-source OMR (`oemer`) + vision LLMs (OpenAI, Anthropic, Gemini, NVIDIA, Ollama).
 
 ## Architecture
 
@@ -8,7 +8,7 @@ Convert sheet-music scans (**PDF / PNG / JPG**) into editable **MuseScore (`.msc
 flowchart LR
     IN[PDF/PNG/JPG] --> PRE[Preprocess: render, deskew, denoise]
     PRE --> P{Provider}
-    P -->|openai/anthropic/gemini/ollama| VLM[VLM → MusicXML]
+    P -->|openai/anthropic/gemini/nvidia/ollama| VLM[VLM → MusicXML]
     P -->|oemer| OMR[Classical OMR → MusicXML]
     OMR -->|optional --refine| VLM
     VLM --> SAN[XML Sanitizer]
@@ -20,6 +20,8 @@ flowchart LR
 ## Install
 
 ```bash
+# python3 -m venv .venv
+# source .venv/bin/activate
 pip install .
 cp .env.example .env  # add API keys
 ```
@@ -43,6 +45,10 @@ pdf2mscz convert scan.pdf score.mscz --provider oemer --refine openai
 
 # Local VLM
 pdf2mscz convert scan.pdf score.musicxml --provider ollama --model llava:13b --format musicxml
+
+# NVIDIA NIM hosted VLM (free credits at build.nvidia.com)
+pdf2mscz convert scan.pdf score.mscz --provider nvidia
+pdf2mscz convert scan.pdf score.mscz --provider nvidia --model meta/llama-3.2-11b-vision-instruct
 
 # Helpers
 pdf2mscz providers
