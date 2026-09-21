@@ -27,9 +27,14 @@ export OPENAI_API_KEY=sk-...
 3
 ## MuseScore CLI
 
-- Ubuntu: `sudo snap install musescore` or apt build
+- Ubuntu/Mint: `flatpak install flathub org.musescore.MuseScore` (empfohlen;
+  das apt-Paket ist veraltet). pdf2mscz erkennt die Flatpak-Installation
+  automatisch und ruft sie als `flatpak run org.musescore.MuseScore …` auf.
 - macOS: `brew install --cask musescore`
-- Verify: `pdf2mscz check-deps`
+- Verify: `pdf2mscz check-deps` (zeigt z. B. `/usr/bin/flatpak run org.musescore.MuseScore`)
+- Alternativ explizit: `pdf2mscz convert … --musescore /usr/bin/musescore`
+- Hinweis Flatpak-Sandbox: Die Flatpak-App sieht nur `$HOME`. Liegen Input/Output
+  außerhalb (z. B. `/tmp`), staged pdf2mscz sie automatisch über `~/.cache/pdf2mscz/`.
 
 Without MuseScore, use `--format musicxml` — the `.musicxml` can later be
 opened and saved as `.mscz` in the MuseScore GUI.

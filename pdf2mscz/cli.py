@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from pdf2mscz.converters import available_providers
 from pdf2mscz.pipeline import ConversionOptions, convert
-from pdf2mscz.utils.musescore_cli import find_musescore
+from pdf2mscz.utils.musescore_cli import find_musescore_command
 
 load_dotenv()
 app = typer.Typer(add_completion=False, help="PDF/PNG/JPG sheet music → MusicXML/.mscz")
@@ -106,8 +106,8 @@ def list_providers() -> None:
 
 @app.command(name="check-deps")
 def check_deps() -> None:
-    exe = find_musescore()
-    typer.echo(f"MuseScore: {exe if exe else 'NOT FOUND (only --format musicxml works)'}")
+    cmd = find_musescore_command()
+    typer.echo(f"MuseScore: {' '.join(cmd) if cmd else 'NOT FOUND (only --format musicxml works)'}")
     typer.echo(f"Providers: {', '.join(available_providers())}")
 
 

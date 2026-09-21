@@ -2,6 +2,7 @@
 
 from pdf2mscz.utils.musescore_cli import (
     find_musescore,
+    find_musescore_command,
     is_available,
     musicxml_to_mscz,
 )
@@ -10,6 +11,7 @@ from pdf2mscz.utils.xml_sanitizer import sanitize_musicxml
 
 __all__ = [
     "find_musescore",
+    "find_musescore_command",
     "is_available",
     "load_images",
     "musicxml_to_mscz",
