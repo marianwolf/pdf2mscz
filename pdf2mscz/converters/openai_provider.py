@@ -24,11 +24,15 @@ class OpenAIProvider(AbstractProvider):
     default_model = "gpt-4o"
 
     def _client(self):  # lazy import so package works without the SDK
-        from openai import OpenAI
-
         api_key = self.config.api_key or os.getenv(self.env_var or "")
         if not api_key:
             raise ValueError("Missing OpenAI API key. Set OPENAI_API_KEY or pass --api-key.")
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise ImportError(
+                'Missing dependency "openai". Install with: pip install "pdf2mscz[openai]"'
+            ) from exc
         return OpenAI(
             api_key=api_key,
             base_url=self.config.base_url,

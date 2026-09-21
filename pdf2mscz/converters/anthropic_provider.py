@@ -25,11 +25,15 @@ class AnthropicProvider(AbstractProvider):
     default_model = "claude-3-5-sonnet-20241022"
 
     def _client(self):
-        from anthropic import Anthropic
-
         api_key = self.config.api_key or os.getenv(self.env_var or "")
         if not api_key:
             raise ValueError("Missing Anthropic API key. Set ANTHROPIC_API_KEY or pass --api-key.")
+        try:
+            from anthropic import Anthropic
+        except ImportError as exc:
+            raise ImportError(
+                'Missing dependency "anthropic". Install with: pip install "pdf2mscz[anthropic]"'
+            ) from exc
         return Anthropic(api_key=api_key, timeout=self.config.timeout)
 
     def _blocks(self, images: list[Image.Image], text: str) -> list[dict]:

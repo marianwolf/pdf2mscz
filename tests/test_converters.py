@@ -36,6 +36,20 @@ def test_fake_provider_contract():
     assert "score-partwise" in out.musicxml
 
 
+def test_missing_sdk_gives_install_hint(monkeypatch):
+    """A provider whose SDK is absent must point at the pip extra."""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "openai", None)  # simulates a missing package
+    provider = get_provider_class("openai")(ProviderConfig(api_key="sk-test"))
+    try:
+        provider._client()
+    except ImportError as exc:
+        assert "pdf2mscz[openai]" in str(exc)
+    else:
+        raise AssertionError("expected ImportError for missing SDK")
+
+
 def test_nvidia_missing_key_gives_helpful_error(monkeypatch):
     monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
     cls = get_provider_class("nvidia")

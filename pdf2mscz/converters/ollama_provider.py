@@ -22,7 +22,12 @@ class OllamaProvider(AbstractProvider):
     default_model = "llava:13b"
 
     def image_to_musicxml(self, images: list[Image.Image]) -> ConversionResult:
-        import httpx
+        try:
+            import httpx
+        except ImportError as exc:  # pragma: no cover — httpx is a core dep
+            raise ImportError(
+                'Missing dependency "httpx". Install with: pip install "pdf2mscz[ollama]"'
+            ) from exc
 
         base_url = (self.config.base_url or "http://localhost:11434").rstrip("/")
         model = self.config.model or self.default_model

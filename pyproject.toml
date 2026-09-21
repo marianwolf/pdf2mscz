@@ -8,10 +8,14 @@ version = "0.1.0"
 description = "Convert sheet music (PDF/PNG/JPG) to editable MuseScore (.mscz) and MusicXML via modular OMR + VLM providers"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "AGPL-3.0-or-later" }
+# PEP 639: SPDX expression + explicit license file (no deprecated
+# "License ::" classifier — PyPI warns about mixing those).
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
 keywords = ["omr", "musicxml", "musescore", "sheet-music", "vlm"]
 authors = [{ name = "pdf2mscz contributors" }]
 classifiers = [
+  "Development Status :: 3 - Alpha",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
@@ -19,10 +23,12 @@ classifiers = [
   "Topic :: Multimedia :: Sound/Audio",
   "Topic :: Scientific/Engineering :: Image Recognition",
 ]
+# Core stays lean; provider SDKs are pulled in via extras below. The
+# provider modules import their SDK lazily and raise a friendly
+# "pip install pdf2mscz[<extra>]" error when it's missing.
 dependencies = [
   "typer>=0.9",
   "pydantic>=2.0",
-  "pydantic-settings>=2.0",
   "pypdfium2>=4.0",
   "pillow>=10.0",
   # OpenCV 5 changed cv2.HoughLinesP to return (N, 4) instead of (N, 1, 4),
@@ -31,16 +37,18 @@ dependencies = [
   "numpy>=1.24",
   "lxml>=5.0",
   "python-dotenv>=1.0",
-  "openai>=1.0",
-  "anthropic>=0.30",
-  "google-genai>=0.3",
   "httpx>=0.25",
 ]
 
 [project.optional-dependencies]
+openai = ["openai>=1.0"]
+nvidia = ["openai>=1.0"]  # NIM exposes an OpenAI-compatible endpoint
+anthropic = ["anthropic>=0.30"]
+gemini = ["google-genai>=0.3"]
+ollama = []  # only needs httpx, which ships with the core
 oemer = ["oemer>=0.0.9", "opencv-python-headless>=4.8,<5"]
-dev = ["pytest>=8.0", "ruff>=0.3", "mypy>=1.8"]
-all = ["pdf2mscz[oemer]", "ollama>=0.2"]
+all = ["pdf2mscz[openai,nvidia,anthropic,gemini,ollama,oemer]"]
+dev = ["pytest>=8.0", "ruff>=0.3", "mypy>=1.8", "build>=1.2", "twine>=5.1"]
 
 [project.scripts]
 pdf2mscz = "pdf2mscz.cli:app"
@@ -51,6 +59,10 @@ Issues = "https://github.com/marianux/pdf2mscz/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pdf2mscz"]
+
+[tool.hatch.build.targets.sdist]
+# Keep editor/tooling junk out of the sdist; tests/docs ship as usual.
+exclude = ["/.kilo"]
 
 [tool.ruff]
 target-version = "py310"

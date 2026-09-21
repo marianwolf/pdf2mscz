@@ -1,5 +1,8 @@
 # pdf2mscz
 
+[![PyPI](https://img.shields.io/pypi/v/pdf2mscz.svg)](https://pypi.org/project/pdf2mscz/)
+[![CI](https://github.com/marianux/pdf2mscz/actions/workflows/ci.yml/badge.svg)](https://github.com/marianux/pdf2mscz/actions/workflows/ci.yml)
+
 Convert sheet-music scans (**PDF / PNG / JPG**) into editable **MuseScore (`.mscz`)** and **MusicXML** using a modular multi-provider pipeline: classical open-source OMR (`oemer`) + vision LLMs (OpenAI, Anthropic, Gemini, NVIDIA, Ollama).
 
 ## Architecture
@@ -20,9 +23,19 @@ flowchart LR
 ## Install
 
 ```bash
-# python3 -m venv .venv
-# source .venv/bin/activate
-pip install .
+# PyPI — core plus the provider extra(s) you use:
+pip install "pdf2mscz[openai]"     # GPT-4o / OpenAI
+pip install "pdf2mscz[anthropic]"  # Claude
+pip install "pdf2mscz[gemini]"     # Google Gemini
+pip install "pdf2mscz[nvidia]"     # NVIDIA NIM hosted VLMs
+pip install "pdf2mscz[ollama]"     # local Ollama (no key needed)
+pip install "pdf2mscz[oemer]"      # classical local OMR
+pip install "pdf2mscz[all]"        # everything
+
+# from source (development):
+# python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev,all]"
+
 cp .env.example .env  # add API keys
 ```
 
@@ -64,12 +77,6 @@ out = convert("scan.pdf", "score.mscz", ConversionOptions(provider="openai"))
 print(out.musicxml_path, out.mscz_path)
 ```
 
-## Adding a provider
-
-Subclass `AbstractProvider` (`pdf2mscz/converters/base.py:24`), decorate with
-`@register_provider`, implement `image_to_musicxml(images) -> ConversionResult`.
-See `openai_provider.py` as reference.
-
 ## License
 
-AGPL-3.0-or-later (see `LICENSE`).
+AGPL-3.0-or-later (see [License](LICENSE)).

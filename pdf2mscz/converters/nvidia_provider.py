@@ -26,11 +26,15 @@ class NvidiaProvider(AbstractProvider):
     default_model = "meta/llama-3.2-90b-vision-instruct"
 
     def _client(self):  # lazy import so package works without the SDK
-        from openai import OpenAI
-
         api_key = self.config.api_key or os.getenv(self.env_var or "")
         if not api_key:
             raise ValueError("Missing NVIDIA API key. Set NVIDIA_API_KEY or pass --api-key.")
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise ImportError(
+                'Missing dependency "openai". Install with: pip install "pdf2mscz[nvidia]"'
+            ) from exc
         # NIM exposes an OpenAI-compatible endpoint, so reuse the OpenAI SDK.
         return OpenAI(
             api_key=api_key,

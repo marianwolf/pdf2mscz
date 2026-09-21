@@ -10,10 +10,14 @@
 ## Install
 
 ```bash
+# PyPI (provider SDKs ship as extras — see README for the full list):
+pip install "pdf2mscz[openai]"      # or [anthropic] [gemini] [nvidia] [ollama] [oemer] [all]
+
+# from source:
 pip install .
 # with local OMR support:
 pip install ".[oemer]"
-# dev:
+# dev (tests, linters, build tooling):
 pip install -e ".[dev]"
 ```
 

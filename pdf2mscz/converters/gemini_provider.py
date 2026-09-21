@@ -23,13 +23,17 @@ class GeminiProvider(AbstractProvider):
     default_model = "gemini-1.5-pro"
 
     def _client(self):
-        from google import genai
-
         api_key = (
             self.config.api_key or os.getenv(self.env_var or "") or os.getenv("GEMINI_API_KEY")
         )
         if not api_key:
             raise ValueError("Missing Google API key. Set GOOGLE_API_KEY or pass --api-key.")
+        try:
+            from google import genai
+        except ImportError as exc:
+            raise ImportError(
+                'Missing dependency "google-genai". Install with: pip install "pdf2mscz[gemini]"'
+            ) from exc
         return genai.Client(api_key=api_key)
 
     def image_to_musicxml(self, images: list[Image.Image]) -> ConversionResult:
