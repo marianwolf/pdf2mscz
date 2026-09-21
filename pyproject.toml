@@ -1,0 +1,69 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pdf2mscz"
+version = "0.1.0"
+description = "Convert sheet music (PDF/PNG/JPG) to editable MuseScore (.mscz) and MusicXML via modular OMR + VLM providers"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "AGPL-3.0-or-later" }
+keywords = ["omr", "musicxml", "musescore", "sheet-music", "vlm"]
+authors = [{ name = "pdf2mscz contributors" }]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Multimedia :: Sound/Audio",
+  "Topic :: Scientific/Engineering :: Image Recognition",
+]
+dependencies = [
+  "typer>=0.9",
+  "pydantic>=2.0",
+  "pydantic-settings>=2.0",
+  "pypdfium2>=4.0",
+  "pillow>=10.0",
+  "opencv-python>=4.8",
+  "numpy>=1.24",
+  "lxml>=5.0",
+  "python-dotenv>=1.0",
+  "openai>=1.0",
+  "anthropic>=0.30",
+  "google-genai>=0.3",
+  "httpx>=0.25",
+]
+
+[project.optional-dependencies]
+oemer = ["oemer>=0.0.9"]
+dev = ["pytest>=8.0", "ruff>=0.3", "mypy>=1.8"]
+all = ["pdf2mscz[oemer]", "ollama>=0.2"]
+
+[project.scripts]
+pdf2mscz = "pdf2mscz.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/marianux/pdf2mscz"
+Issues = "https://github.com/marianux/pdf2mscz/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pdf2mscz"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint.per-file-ignores]
+"pdf2mscz/cli.py" = ["B008", "BLE001"]
+"pdf2mscz/utils/xml_sanitizer.py" = ["BLE001", "S110"]
+"pdf2mscz/**/oemer_provider.py" = ["PLW1510"]
+"pdf2mscz/utils/musescore_cli.py" = ["PLW1510"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
