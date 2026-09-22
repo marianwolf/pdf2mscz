@@ -29,7 +29,18 @@ cp .env.example .env
 export OPENAI_API_KEY=sk-...
 export NVIDIA_API_KEY=nvapi-...   # from build.nvidia.com
 ```
-3
+
+## Model choice
+
+- **Vision/multimodal models only** — every request carries the page image.
+  Text-only endpoints (e.g. NVIDIA "lightning" models such as
+  `nvidia/nemotron-3.5-lightning-30b-a3b`) reject image parts with
+  `400 … multimodal processing is not enabled`.
+- Small VLMs transcribe more reliably when requests are split per staff system
+  (`--chunk system`, the default) instead of sending the whole page at once.
+- If answers come back truncated, raise `--max-tokens` (or keep
+  `--chunk system`, whose answers are short).
+
 ## MuseScore CLI
 
 - Ubuntu/Mint: `flatpak install flathub org.musescore.MuseScore` (empfohlen;

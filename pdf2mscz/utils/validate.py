@@ -11,8 +11,6 @@ from dataclasses import dataclass
 
 from lxml import etree
 
-_PARSE_OPTS = {"recover": True, "huge_tree": True}
-
 
 @dataclass
 class ScoreStats:
@@ -28,6 +26,14 @@ class ScoreStats:
         return f"{self.measures} measures, {self.pitched_notes} pitched notes, {self.rests} rests"
 
 
+def localname(node: etree._Element) -> str:
+    """Element name without an optional namespace."""
+    tag = node.tag
+    if not isinstance(tag, str):  # comments / PIs
+        return ""
+    return tag.rsplit("}", 1)[-1]
+
+
 def _count(root: etree._Element, xpath: str) -> int:
     try:
         return int(float(root.xpath(f"count({xpath})")))
@@ -35,14 +41,8 @@ def _count(root: etree._Element, xpath: str) -> int:
         return 0
 
 
-def validate_score(xml: str) -> ScoreStats:
-    """Count musical content. Returns zeros for anything unparseable."""
-    if not xml or not xml.strip():
-        return ScoreStats()
-    try:
-        root = etree.fromstring(xml.encode("utf-8"), parser=etree.XMLParser(**_PARSE_OPTS))
-    except Exception:
-        return ScoreStats()
+def score_stats(root: etree._Element | None) -> ScoreStats:
+    """Count musical content of a parsed ``score-partwise`` element."""
     if root is None:
         return ScoreStats()
     return ScoreStats(
@@ -52,6 +52,17 @@ def validate_score(xml: str) -> ScoreStats:
         parts=_count(root, ".//*[local-name()='part']"),
         title=_first_text(root, ".//*[local-name()='work']/*[local-name()='work-title']"),
     )
+
+
+def validate_score(xml: str) -> ScoreStats:
+    """Count musical content. Returns zeros for anything unparseable."""
+    if not xml or not xml.strip():
+        return ScoreStats()
+    try:
+        root = etree.fromstring(xml.encode("utf-8"), parser=etree.XMLParser(recover=True))
+    except Exception:
+        return ScoreStats()
+    return score_stats(root)
 
 
 def _first_text(root: etree._Element, xpath: str) -> str:

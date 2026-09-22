@@ -89,6 +89,42 @@ def test_sanitizer_recovers_truncated_document():
     assert res.stats is not None and res.stats.measures == 2
 
 
+def test_sanitizer_cleans_model_noise():
+    """Commentary, duplicated measures and nonsense clefs must not survive."""
+    dirty = (
+        '<score-partwise version="3.1"><part-list><score-part id="P1">'
+        "<part-name>Viola</part-name></score-part></part-list><part id='P1'>"
+        '<measure number="1">` element for each measure and include the necessary '
+        "attributes and notes. Here is the output:\n"
+        '<measure number="1"><attributes><divisions>4</divisions><clef>8</clef>'
+        "<key><fifths>2</fifths></key>"
+        "<time><beats>12</beats><beat-type>8</beat-type></time></attributes>"
+        "<note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration>"
+        "</note></measure></measure></part></score-partwise>"
+    )
+    res = sanitize_musicxml(dirty)
+    assert res.ok, res.reason
+    assert "Here is the output" not in res.xml
+    assert "<clef>8</clef>" not in res.xml  # dropped: no <sign> child
+    assert res.stats is not None
+    assert res.stats.measures == 1  # prose-carrier wrapper removed
+    assert res.stats.pitched_notes == 1
+
+
+def test_sanitizer_drops_notes_without_pitch_data():
+    doc = (
+        '<score-partwise version="3.1"><part-list><score-part id="P1">'
+        "<part-name>M</part-name></score-part></part-list><part id='P1'>"
+        '<measure number="1"><note><duration>4</duration></note>'
+        "<note><pitch><step>G</step></pitch><duration>4</duration></note>"
+        "<note><pitch><step>A</step><octave>4</octave></pitch><duration>4</duration>"
+        "</note></measure></part></score-partwise>"
+    )
+    res = sanitize_musicxml(doc)
+    assert res.ok, res.reason
+    assert res.stats is not None and res.stats.pitched_notes == 1
+
+
 def test_sanitizer_rejects_rests_only_score():
     doc = (
         '<score-partwise version="3.1"><part-list><score-part id="P1">'

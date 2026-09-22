@@ -133,7 +133,9 @@ def _complete_valid(
         )
         if msg not in warnings:
             warnings.append(msg)
-    return text, res
+    # Hand back the *cleaned* document when it is usable: prose stripping and
+    # measure de-duplication happen during sanitization.
+    return (res.xml if res.ok else text), res
 
 
 def _transcribe(
@@ -177,7 +179,7 @@ def _transcribe(
             if not context:
                 context = first_attributes(text)
             fragments.append(text)
-            stats = validate_score(as_document(text))
+            stats = validate_score(text)
             _progress(
                 opts,
                 f"  system {idx}/{len(systems)}: {stats.measures} measures, "
