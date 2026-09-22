@@ -68,6 +68,16 @@ pdf2mscz providers
 pdf2mscz check-deps
 ```
 
+> **Vision models only.** Every provider call sends the rendered page image, so
+> text-only LLMs cannot be used — `--model` must point at a vision/multimodal
+> model. This includes the "lightning" class of NVIDIA NIM models (e.g.
+> `nvidia/nemotron-3.5-lightning-30b-a3b`): the endpoint accepts the model name
+> but rejects the image parts with
+> `400 … Received multimodal data but multimodal processing is not enabled`,
+> and the conversion fails. Use a vision-capable model instead, e.g.
+> `meta/llama-3.2-11b-vision-instruct`, `meta/llama-3.2-90b-vision-instruct`
+> or `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`.
+
 ## Python API
 
 ```python

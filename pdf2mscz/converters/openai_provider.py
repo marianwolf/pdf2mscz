@@ -39,37 +39,43 @@ class OpenAIProvider(AbstractProvider):
             timeout=self.config.timeout,
         )
 
-    def image_to_musicxml(self, images: list[Image.Image]) -> ConversionResult:
+    def _complete(self, content: list[dict], temperature: float) -> tuple[str, bool]:
         client = self._client()
         model = self.config.model or self.default_model
-        content: list[dict] = [{"type": "text", "text": SYSTEM_PROMPT}]
+        kwargs: dict = {"model": model, "messages": [{"role": "user", "content": content}]}
+        kwargs["temperature"] = temperature
+        if self.config.max_tokens > 0:
+            kwargs["max_tokens"] = self.config.max_tokens
+        resp = client.chat.completions.create(**kwargs)
+        choice = resp.choices[0]
+        self.last_truncated = choice.finish_reason == "length"
+        return (choice.message.content or "").strip(), self.last_truncated
+
+    @staticmethod
+    def _content(prompt: str, images: list[Image.Image]) -> list[dict]:
+        content: list[dict] = [{"type": "text", "text": prompt}]
         for img in images:
             content.append({"type": "image_url", "image_url": {"url": image_to_data_url(img)}})
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": content}],  # type: ignore[arg-type]
-            temperature=self.config.temperature,
-            max_tokens=16000,
+        return content
+
+    def complete_text(self, prompt: str, images: list[Image.Image], temperature: float = 0.0) -> str:
+        text, _ = self._complete(self._content(prompt, images), temperature)
+        return text
+
+    def image_to_musicxml(self, images: list[Image.Image]) -> ConversionResult:
+        model = self.config.model or self.default_model
+        text, truncated = self._complete(self._content(SYSTEM_PROMPT, images), self.config.temperature)
+        return ConversionResult(
+            musicxml=text, confidence=0.7, provider=self.name, model=model, truncated=truncated
         )
-        text = (resp.choices[0].message.content or "").strip()
-        return ConversionResult(musicxml=text, confidence=0.7, provider=self.name, model=model)
 
     def refine_musicxml(self, images: list[Image.Image], candidate_xml: str) -> ConversionResult:
-        client = self._client()
         model = self.config.model or self.default_model
-        content: list[dict] = [
-            {"type": "text", "text": REFINEMENT_PROMPT + "\n\nCANDIDATE:\n" + candidate_xml}
-        ]
-        for img in images:
-            content.append({"type": "image_url", "image_url": {"url": image_to_data_url(img)}})
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": content}],  # type: ignore[arg-type]
-            temperature=0.0,
-            max_tokens=16000,
+        prompt = REFINEMENT_PROMPT + "\n\nCANDIDATE:\n" + candidate_xml
+        text, truncated = self._complete(self._content(prompt, images), 0.0)
+        return ConversionResult(
+            musicxml=text, confidence=0.8, provider=self.name, model=model, truncated=truncated
         )
-        text = (resp.choices[0].message.content or "").strip()
-        return ConversionResult(musicxml=text, confidence=0.8, provider=self.name, model=model)
 
     @classmethod
     def supports_refinement(cls) -> bool:

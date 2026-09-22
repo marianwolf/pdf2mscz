@@ -22,15 +22,83 @@ def test_check_deps_command():
 
 
 def test_sanitizer_strips_fences():
-    dirty = 'Here you go:\n```xml\n<?xml version="1.0"?><score-partwise version="3.1"><part-list/><part id="P1"/></score-partwise>\n```'
-    clean = sanitize_musicxml(dirty)
-    assert "```" not in clean
-    assert is_valid_musicxml(clean)
+    dirty = (
+        'Here you go:\n```xml\n<?xml version="1.0"?><score-partwise version="3.1">'
+        '<part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>'
+        '<part id="P1"><measure number="1"><note><pitch><step>C</step><octave>4</octave>'
+        "</pitch><duration>4</duration></note></measure></part></score-partwise>\n```"
+    )
+    res = sanitize_musicxml(dirty)
+    assert res.ok, res.reason
+    assert "```" not in res.xml
+    assert is_valid_musicxml(res.xml)
 
 
-def test_sanitizer_fallback_on_garbage():
-    clean = sanitize_musicxml("definitely not xml {{{")
-    assert is_valid_musicxml(clean)
+def test_sanitizer_garbage_is_flagged_not_swallowed():
+    """WP0: garbage must be reported, never silently replaced by a template."""
+    res = sanitize_musicxml("definitely not xml {{{")
+    assert not res.ok
+    assert res.reason == "prose_only"
+    assert not res.placeholder
+    assert "definitely" in res.xml  # raw input kept for inspection
+
+
+def test_sanitizer_placeholder_only_with_allow_empty():
+    res = sanitize_musicxml("nope", allow_empty=True)
+    assert not res.ok and res.placeholder
+    assert is_valid_musicxml(res.xml)
+
+
+def test_sanitizer_flags_model_prose_wrap():
+    """A reasoning dump ending in a bare <measure> is a fragment, not a score."""
+    res = sanitize_musicxml("**Step 1**: I see a bass clef.\n\n`<measure><note/></measure>`")
+    assert not res.ok
+    assert res.reason == "fragment"
+
+
+def test_sanitizer_accepts_and_counts_real_music():
+    doc = (
+        '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="3.1">'
+        '<part-list><score-part id="P1"><part-name>Viola</part-name></score-part></part-list>'
+        '<part id="P1"><measure number="1"><note><pitch><step>C</step><octave>4</octave>'
+        "</pitch><duration>4</duration></note></measure>"
+        '<measure number="2"><note><rest/><duration>4</duration></note></measure></part>'
+        "</score-partwise>"
+    )
+    res = sanitize_musicxml(doc)
+    assert res.ok, res.reason
+    assert res.stats is not None
+    assert res.stats.measures == 2
+    assert res.stats.pitched_notes == 1
+
+
+def test_sanitizer_recovers_truncated_document():
+    """Cut-off output is salvaged (and marked) instead of crashing lxml."""
+    full = (
+        '<score-partwise version="3.1"><part-list><score-part id="P1">'
+        "<part-name>M</part-name></score-part></part-list><part id='P1'>"
+        '<measure number="1"><note><pitch><step>C</step><octave>4</octave></pitch>'
+        "<duration>4</duration></note></measure>"
+        '<measure number="2"><note><pitch><step>E</step><octave>4</octave></pitch>'
+        "<duration>4</duration></note></measure></part></score-partwise>"
+    )
+    res = sanitize_musicxml(full[: full.rindex("</measure>")])
+    assert res.ok, res.reason
+    assert res.recovered
+    # lxml's recover parser re-closes the truncated tail, so both measures survive.
+    assert res.stats is not None and res.stats.measures == 2
+
+
+def test_sanitizer_rejects_rests_only_score():
+    doc = (
+        '<score-partwise version="3.1"><part-list><score-part id="P1">'
+        "<part-name>M</part-name></score-part></part-list>"
+        '<part id="P1"><measure number="1"><note><rest/><duration>4</duration></note>'
+        "</measure></part></score-partwise>"
+    )
+    res = sanitize_musicxml(doc)
+    assert not res.ok
+    assert res.reason == "no_pitched_notes"
 
 
 def test_musescore_flatpak_staging_outside_home(monkeypatch, tmp_path):

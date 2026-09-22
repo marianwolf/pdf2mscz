@@ -42,17 +42,21 @@ class NvidiaProvider(AbstractProvider):
             timeout=self.config.timeout,
         )
 
-    def _complete(self, content: list[dict], temperature: float) -> str:
+    def _complete(self, content: list[dict], temperature: float) -> tuple[str, bool]:
+        """Returns ``(text, truncated)`` — NIM output caps differ per model."""
         client = self._client()
         model = self.config.model or self.default_model
-        # No max_tokens: output caps differ per NIM model (e.g. phi-3-vision
-        # allows 4096), and omitting it lets the server pick the model limit.
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": content}],  # type: ignore[arg-type]
-            temperature=temperature,
-        )
-        return (resp.choices[0].message.content or "").strip()
+        kwargs: dict = {"model": model, "messages": [{"role": "user", "content": content}]}
+        kwargs["temperature"] = temperature
+        if self.config.max_tokens > 0:
+            # Output caps differ per NIM model (e.g. phi-3-vision allows 4096);
+            # 0 (--max-tokens 0) lets the server pick its own limit.
+            kwargs["max_tokens"] = self.config.max_tokens
+        resp = client.chat.completions.create(**kwargs)
+        choice = resp.choices[0]
+        text = (choice.message.content or "").strip()
+        self.last_truncated = choice.finish_reason == "length"
+        return text, self.last_truncated
 
     @staticmethod
     def _page_content(prompt: str, images: list[Image.Image]) -> list[dict]:
@@ -61,16 +65,24 @@ class NvidiaProvider(AbstractProvider):
             content.append({"type": "image_url", "image_url": {"url": image_to_data_url(img)}})
         return content
 
+    def complete_text(self, prompt: str, images: list[Image.Image], temperature: float = 0.0) -> str:
+        text, _ = self._complete(self._page_content(prompt, images), temperature)
+        return text
+
     def image_to_musicxml(self, images: list[Image.Image]) -> ConversionResult:
         model = self.config.model or self.default_model
-        text = self._complete(self._page_content(SYSTEM_PROMPT, images), self.config.temperature)
-        return ConversionResult(musicxml=text, confidence=0.7, provider=self.name, model=model)
+        text, truncated = self._complete(self._page_content(SYSTEM_PROMPT, images), self.config.temperature)
+        return ConversionResult(
+            musicxml=text, confidence=0.7, provider=self.name, model=model, truncated=truncated
+        )
 
     def refine_musicxml(self, images: list[Image.Image], candidate_xml: str) -> ConversionResult:
         model = self.config.model or self.default_model
         prompt = REFINEMENT_PROMPT + "\n\nCANDIDATE:\n" + candidate_xml
-        text = self._complete(self._page_content(prompt, images), 0.0)
-        return ConversionResult(musicxml=text, confidence=0.8, provider=self.name, model=model)
+        text, truncated = self._complete(self._page_content(prompt, images), 0.0)
+        return ConversionResult(
+            musicxml=text, confidence=0.8, provider=self.name, model=model, truncated=truncated
+        )
 
     @classmethod
     def supports_refinement(cls) -> bool:

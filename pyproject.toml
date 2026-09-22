@@ -71,6 +71,8 @@ line-length = 100
 [tool.ruff.lint.per-file-ignores]
 "pdf2mscz/cli.py" = ["B008", "BLE001"]
 "pdf2mscz/utils/xml_sanitizer.py" = ["BLE001", "S110"]
+"pdf2mscz/utils/merge.py" = ["BLE001"]
+"pdf2mscz/utils/validate.py" = ["BLE001"]
 "pdf2mscz/**/oemer_provider.py" = ["PLW1510"]
 "pdf2mscz/utils/musescore_cli.py" = ["PLW1510"]
 

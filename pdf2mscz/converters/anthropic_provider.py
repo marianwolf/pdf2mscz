@@ -53,36 +53,43 @@ class AnthropicProvider(AbstractProvider):
         blocks.append({"type": "text", "text": text})
         return blocks
 
-    def image_to_musicxml(self, images: list[Image.Image]) -> ConversionResult:
+    def _complete(self, system: str, images: list[Image.Image], user_text: str, temperature: float):
         client = self._client()
         model = self.config.model or self.default_model
-        msg = client.messages.create(
-            model=model,
-            max_tokens=16000,
-            temperature=self.config.temperature,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": self._blocks(images, "Transcribe.")}],
-        )
+        kwargs: dict = {
+            "model": model,
+            "max_tokens": self.config.max_tokens or 4096,
+            "temperature": temperature,
+            "system": system,
+            "messages": [{"role": "user", "content": self._blocks(images, user_text)}],
+        }
+        msg = client.messages.create(**kwargs)
         text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
-        return ConversionResult(musicxml=text, confidence=0.7, provider=self.name, model=model)
+        # Anthropic signals output-cap hits with stop_reason == "max_tokens".
+        self.last_truncated = getattr(msg, "stop_reason", None) == "max_tokens"
+        return text, self.last_truncated
+
+    def complete_text(self, prompt: str, images: list[Image.Image], temperature: float = 0.0) -> str:
+        text, _ = self._complete(prompt, images, "Transcribe.", temperature)
+        return text
+
+    def image_to_musicxml(self, images: list[Image.Image]) -> ConversionResult:
+        model = self.config.model or self.default_model
+        text, truncated = self._complete(
+            SYSTEM_PROMPT, images, "Transcribe.", self.config.temperature
+        )
+        return ConversionResult(
+            musicxml=text, confidence=0.7, provider=self.name, model=model, truncated=truncated
+        )
 
     def refine_musicxml(self, images: list[Image.Image], candidate_xml: str) -> ConversionResult:
-        client = self._client()
         model = self.config.model or self.default_model
-        msg = client.messages.create(
-            model=model,
-            max_tokens=16000,
-            temperature=0.0,
-            system=REFINEMENT_PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": self._blocks(images, f"CANDIDATE:\n{candidate_xml}"),
-                }
-            ],
+        text, truncated = self._complete(
+            REFINEMENT_PROMPT, images, f"CANDIDATE:\n{candidate_xml}", 0.0
         )
-        text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
-        return ConversionResult(musicxml=text, confidence=0.8, provider=self.name, model=model)
+        return ConversionResult(
+            musicxml=text, confidence=0.8, provider=self.name, model=model, truncated=truncated
+        )
 
     @classmethod
     def supports_refinement(cls) -> bool:

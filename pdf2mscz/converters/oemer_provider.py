@@ -23,6 +23,9 @@ class OemerProvider(AbstractProvider):
 
     name = "oemer"
     requires_api_key = False
+    # Classical OMR: no LLM to repair with, and no prompt to chunk by.
+    supports_repair = False
+    supports_chunking = False
 
     def image_to_musicxml(self, images: list[Image.Image]) -> ConversionResult:
         exe = shutil.which("oemer")

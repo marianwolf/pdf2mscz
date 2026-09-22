@@ -8,6 +8,8 @@ from typing import ClassVar
 from PIL import Image
 from pydantic import BaseModel, Field
 
+from pdf2mscz.utils.prompts import REPAIR_PROMPT
+
 
 class ConversionResult(BaseModel):
     """Normalized output of any provider."""
@@ -16,6 +18,9 @@ class ConversionResult(BaseModel):
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     provider: str = Field(default="")
     model: str = Field(default="")
+    truncated: bool = Field(
+        default=False, description="Backend hit its output-token limit (finish_reason=length)."
+    )
 
 
 class ProviderConfig(BaseModel):
@@ -28,6 +33,8 @@ class ProviderConfig(BaseModel):
     base_url: str | None = None
     temperature: float = 0.0
     timeout: float = 120.0
+    #: Output cap handed to the backend; ``0`` omits the parameter entirely.
+    max_tokens: int = 8192
 
 
 class AbstractProvider(ABC):
@@ -41,14 +48,44 @@ class AbstractProvider(ABC):
     name: ClassVar[str] = "base"
     requires_api_key: ClassVar[bool] = False
     env_var: ClassVar[str | None] = None
+    #: Free-form completion exists (VLMs) — enables the repair loop.
+    supports_repair: ClassVar[bool] = True
+    #: Page images can be cut into staff systems (false for classical OMR).
+    supports_chunking: ClassVar[bool] = True
 
     def __init__(self, config: ProviderConfig | None = None) -> None:
         self.config = config or ProviderConfig()
+        #: Set by :meth:`complete_text` when the backend truncated its answer.
+        self.last_truncated: bool = False
 
     @abstractmethod
     def image_to_musicxml(self, images: list[Image.Image]) -> ConversionResult:
         """Transcribe page images to MusicXML."""
         raise NotImplementedError
+
+    def complete_text(self, prompt: str, images: list[Image.Image], temperature: float = 0.0) -> str:
+        """Run an arbitrary prompt against the images. Sets ``last_truncated``."""
+        raise NotImplementedError(f"{self.name} does not support free-form completion")
+
+    def repair_musicxml(
+        self,
+        images: list[Image.Image],
+        bad_xml: str,
+        reason: str = "",
+        detail: str = "",
+    ) -> ConversionResult:
+        """Ask the model to redo output that failed validation."""
+        if not self.supports_repair:
+            raise NotImplementedError(f"{self.name} does not support repair")
+        prompt = REPAIR_PROMPT.format(reason=reason or "invalid XML", detail=detail, previous=bad_xml)
+        text = self.complete_text(prompt, images, temperature=0.3)
+        return ConversionResult(
+            musicxml=text,
+            confidence=0.6,
+            provider=self.name,
+            model=self.config.model,
+            truncated=self.last_truncated,
+        )
 
     def refine_musicxml(self, images: list[Image.Image], candidate_xml: str) -> ConversionResult:
         """Optionally correct foreign OMR output. Default: not supported."""

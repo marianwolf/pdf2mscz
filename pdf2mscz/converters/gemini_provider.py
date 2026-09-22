@@ -36,32 +36,46 @@ class GeminiProvider(AbstractProvider):
             ) from exc
         return genai.Client(api_key=api_key)
 
-    def image_to_musicxml(self, images: list[Image.Image]) -> ConversionResult:
+    def _generate(self, prompt: str, images: list[Image.Image], temperature: float):
         client = self._client()
         model = self.config.model or self.default_model
+        from google.genai import types
+
+        config_kwargs: dict = {"temperature": temperature}
+        if self.config.max_tokens > 0:
+            config_kwargs["max_output_tokens"] = self.config.max_tokens
         resp = client.models.generate_content(
             model=model,
-            contents=[SYSTEM_PROMPT, *images],
+            contents=[prompt, *images],
+            config=types.GenerateContentConfig(**config_kwargs),
         )
+        text = (resp.text or "").strip()
+        # Gemini reports output-cap hits as finish_reason=MAX_TOKENS.
+        finish = ""
+        candidates = getattr(resp, "candidates", None) or []
+        if candidates:
+            finish = str(getattr(candidates[0], "finish_reason", "") or "")
+        self.last_truncated = "MAX_TOKENS" in finish.upper()
+        return text, self.last_truncated
+
+    def complete_text(self, prompt: str, images: list[Image.Image], temperature: float = 0.0) -> str:
+        text, _ = self._generate(prompt, images, temperature)
+        return text
+
+    def image_to_musicxml(self, images: list[Image.Image]) -> ConversionResult:
+        model = self.config.model or self.default_model
+        text, truncated = self._generate(SYSTEM_PROMPT, images, self.config.temperature)
         return ConversionResult(
-            musicxml=(resp.text or "").strip(),
-            confidence=0.7,
-            provider=self.name,
-            model=model,
+            musicxml=text, confidence=0.7, provider=self.name, model=model, truncated=truncated
         )
 
     def refine_musicxml(self, images: list[Image.Image], candidate_xml: str) -> ConversionResult:
-        client = self._client()
         model = self.config.model or self.default_model
-        resp = client.models.generate_content(
-            model=model,
-            contents=[REFINEMENT_PROMPT, f"CANDIDATE:\n{candidate_xml}", *images],
+        text, truncated = self._generate(
+            REFINEMENT_PROMPT + f"\n\nCANDIDATE:\n{candidate_xml}", images, 0.0
         )
         return ConversionResult(
-            musicxml=(resp.text or "").strip(),
-            confidence=0.8,
-            provider=self.name,
-            model=model,
+            musicxml=text, confidence=0.8, provider=self.name, model=model, truncated=truncated
         )
 
     @classmethod
