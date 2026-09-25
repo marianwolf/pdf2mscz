@@ -21,6 +21,13 @@ def test_check_deps_command():
     assert "MuseScore" in r.output
 
 
+def test_convert_help_documents_jobs_flag():
+    r = runner.invoke(app, ["convert", "--help"])
+    assert r.exit_code == 0
+    assert "--jobs" in r.output
+    assert "--retry" in r.output
+
+
 def test_sanitizer_strips_fences():
     dirty = (
         'Here you go:\n```xml\n<?xml version="1.0"?><score-partwise version="3.1">'

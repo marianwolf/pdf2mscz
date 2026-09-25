@@ -9,8 +9,10 @@ which keeps each request small enough to fit the model's output-token budget.
 
 from __future__ import annotations
 
+import copy
 import os
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -65,6 +67,7 @@ class ConversionOptions:
     temperature: float = 0.0
     # --- WP1/WP2 knobs ---
     chunk: str = "system"  # system | page
+    jobs: int = 4  # parallel VLM requests (1 = fully serial)
     retry: int = 1  # extra repair attempts per request
     max_tokens: int = 8192  # backend output cap; 0 = let the server decide
     allow_empty: bool = False  # write the placeholder score anyway
@@ -85,6 +88,14 @@ class ConversionOutput:
 def _progress(opts: ConversionOptions, message: str) -> None:
     if opts.on_progress:
         opts.on_progress(message)
+
+
+def _preprocess_all(images: list[Image.Image], opts: ConversionOptions) -> list[Image.Image]:
+    """Deskew + denoise every page, in parallel when --jobs allows it."""
+    if opts.jobs > 1 and len(images) > 1:
+        with ThreadPoolExecutor(max_workers=min(opts.jobs, len(images))) as pool:
+            return list(pool.map(preprocess_image, images))
+    return [preprocess_image(im) for im in images]
 
 
 def _build_provider(name: str, opts: ConversionOptions, *, model: str = "", api_key=None) -> AbstractProvider:
@@ -138,6 +149,117 @@ def _complete_valid(
     return (res.xml if res.ok else text), res
 
 
+#: One provider request: a staff-system crop or a whole page.
+@dataclass
+class _Task:
+    page_no: int
+    images: list[Image.Image]
+    is_fragment: bool  # False → whole page sent with the system prompt
+    idx: int = 0  # system index on its page (1-based), 0 for whole pages
+    n_systems: int = 0
+    first_line: bool = False
+
+    @property
+    def label(self) -> str:
+        if self.is_fragment:
+            return f"page {self.page_no} system {self.idx}"
+        return f"page {self.page_no}"
+
+
+#: ``(text, raw attempts, per-task warnings, sanitize result)`` of one request.
+_TaskResult = tuple[str, list[str], list[str], "SanitizeResult"]
+
+
+def _plan_tasks(
+    images: list[Image.Image], opts: ConversionOptions
+) -> tuple[list[_Task], list[list[tuple[int, int]]]]:
+    """Cut every page into its staff systems (serial; ~15 ms per page)."""
+    tasks: list[_Task] = []
+    systems_by_page: list[list[tuple[int, int]]] = []
+    for page_no, page in enumerate(images, start=1):
+        systems = find_systems(page)
+        systems_by_page.append(systems)
+        if not systems:
+            _progress(opts, f"Page {page_no}: no staff lines detected, sending whole page")
+            tasks.append(_Task(page_no=page_no, images=[page], is_fragment=False))
+            continue
+        _progress(opts, f"Page {page_no}/{len(images)}: {len(systems)} staff systems detected")
+        for idx, (top, bottom) in enumerate(systems, start=1):
+            tasks.append(
+                _Task(
+                    page_no=page_no,
+                    # Crops are made here, up front: worker threads then only
+                    # read their own image and never touch the shared page.
+                    images=[page.crop((0, top, page.width, bottom))],
+                    is_fragment=True,
+                    idx=idx,
+                    n_systems=len(systems),
+                    first_line=(idx == 1 and page_no == 1),
+                )
+            )
+    return tasks, systems_by_page
+
+
+def _run_task(
+    provider: AbstractProvider,
+    task: _Task,
+    context: str,
+    opts: ConversionOptions,
+) -> _TaskResult:
+    """Run one request on a private copy of the provider.
+
+    The copy matters: providers stash ``last_truncated`` on ``self``, so a
+    shared instance would race when requests run in parallel.
+    """
+    prompt = (
+        fragment_prompt(context=context, first_line=task.first_line)
+        if task.is_fragment
+        else SYSTEM_PROMPT
+    )
+    raw: list[str] = []
+    warns: list[str] = []
+    text, res = _complete_valid(copy.copy(provider), task.images, prompt, opts, raw, warns)
+    return text, raw, warns, res
+
+
+def _report_task(opts: ConversionOptions, task: _Task, result: _TaskResult) -> None:
+    """Emit the per-system progress line (in reading order, main thread only)."""
+    text, _raw, _warns, res = result
+    if not (task.is_fragment and res.ok):
+        return
+    stats = validate_score(text)
+    _progress(
+        opts,
+        f"  system {task.idx}/{task.n_systems}: {stats.measures} measures, "
+        f"{stats.pitched_notes} notes",
+    )
+
+
+def _collect(
+    tasks: list[_Task],
+    results: list[_TaskResult | None],
+    raw_parts: list[str],
+    warnings: list[str],
+) -> tuple[list[str], int]:
+    """Merge per-task outputs into ordered fragments (reading order preserved)."""
+    fragments: list[str] = []
+    whole_pages = 0
+    for task, result in zip(tasks, results):
+        if result is None:  # pragma: no cover — every slot is filled before collect
+            continue
+        text, raw, warns, res = result
+        raw_parts.extend(raw)
+        warnings.extend(warns)
+        if not task.is_fragment:
+            fragments.append(text)
+            whole_pages += 1
+        elif not res.ok:
+            warnings.append(f"{task.label}: unusable output ({res.reason}) — skipped")
+        else:
+            fragments.append(text)
+    return fragments, whole_pages
+
+
 def _transcribe(
     provider: AbstractProvider,
     images: list[Image.Image],
@@ -153,38 +275,43 @@ def _transcribe(
         text, _ = _complete_valid(provider, images, SYSTEM_PROMPT, opts, raw_parts, warnings)
         return text, None
 
-    fragments: list[str] = []
-    systems_by_page: list[list[tuple[int, int]]] = []
-    whole_pages = 0
+    tasks, systems_by_page = _plan_tasks(images, opts)
+    results: list[_TaskResult | None] = [None] * len(tasks)
     context = ""
-    for page_no, page in enumerate(images, start=1):
-        systems = find_systems(page)
-        systems_by_page.append(systems)
-        if not systems:
-            _progress(opts, f"Page {page_no}: no staff lines detected, sending whole page")
-            text, _ = _complete_valid(provider, [page], SYSTEM_PROMPT, opts, raw_parts, warnings)
-            fragments.append(text)
-            whole_pages += 1
-            continue
-        _progress(opts, f"Page {page_no}/{len(images)}: {len(systems)} staff systems detected")
-        for idx, (top, bottom) in enumerate(systems, start=1):
-            crop = page.crop((0, top, page.width, bottom))
-            prompt = fragment_prompt(context=context, first_line=(idx == 1 and page_no == 1))
-            text, res = _complete_valid(provider, [crop], prompt, opts, raw_parts, warnings)
-            if not res.ok:
-                warnings.append(
-                    f"page {page_no} system {idx}: unusable output ({res.reason}) — skipped"
-                )
-                continue
-            if not context:
-                context = first_attributes(text)
-            fragments.append(text)
-            stats = validate_score(text)
-            _progress(
-                opts,
-                f"  system {idx}/{len(systems)}: {stats.measures} measures, "
-                f"{stats.pitched_notes} notes",
-            )
+
+    if opts.jobs <= 1 or len(tasks) == 1:
+        # Serial: carried-over attributes may come from any successful
+        # fragment, so later prompts keep improving as before.
+        for i, task in enumerate(tasks):
+            results[i] = result = _run_task(provider, task, context, opts)
+            _report_task(opts, task, result)
+            if task.is_fragment and result[3].ok and not context:
+                context = first_attributes(result[0])
+    else:
+        # Parallel: the first request runs alone so the remaining prompts can
+        # carry its established <attributes>; everything after that is issued
+        # concurrently and collected in submission order (deterministic output).
+        results[0] = first = _run_task(provider, tasks[0], "", opts)
+        _report_task(opts, tasks[0], first)
+        if tasks[0].is_fragment and first[3].ok:
+            context = first_attributes(first[0])
+        # If page 1 had no detectable systems, no context exists yet — the
+        # rare case where parallel and serial prompts differ slightly.
+        with ThreadPoolExecutor(max_workers=min(opts.jobs, len(tasks) - 1)) as pool:
+            pending = [
+                (i, pool.submit(_run_task, provider, task, context, opts))
+                for i, task in enumerate(tasks[1:], start=1)
+            ]
+            try:
+                for i, fut in pending:
+                    results[i] = result = fut.result()
+                    _report_task(opts, tasks[i], result)
+            except BaseException:
+                for _, fut in pending:
+                    fut.cancel()  # don't fire off the remaining requests after an error
+                raise
+
+    fragments, whole_pages = _collect(tasks, results, raw_parts, warnings)
 
     expected = estimate_measures(images, systems_by_page) if any(systems_by_page) else None
     if not fragments:
@@ -218,14 +345,14 @@ def convert(
     if src.suffix.lower() == ".pdf":
         total = pdf_page_count(src)
         idx = parse_pages(opts.pages, total)
-        images = load_images(src, pages=idx, dpi=opts.dpi)
+        images = load_images(src, pages=idx, dpi=opts.dpi, total=total)
     else:
         images = load_images(src, dpi=opts.dpi)
     if not images:
         raise ValueError("No pages selected (check --pages).")
 
     if opts.preprocess:
-        images = [preprocess_image(im) for im in images]
+        images = _preprocess_all(images, opts)
 
     # 2. OMR / VLM transcription.
     provider = _build_provider(opts.provider, opts, model=opts.model)

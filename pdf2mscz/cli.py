@@ -109,6 +109,14 @@ def convert_cmd(
     retry: int = typer.Option(
         1, "--retry", min=0, max=5, help="Repair attempts per request when output is invalid."
     ),
+    jobs: int = typer.Option(
+        4,
+        "--jobs",
+        "-j",
+        min=1,
+        max=32,
+        help="Parallel VLM requests per staff line (1 = serial).",
+    ),
     max_tokens: int = typer.Option(
         8192, "--max-tokens", min=0, help="Backend output cap; 0 = server default."
     ),
@@ -148,6 +156,7 @@ def convert_cmd(
         temperature=temperature,
         chunk=chunk,
         retry=retry,
+        jobs=jobs,
         max_tokens=max_tokens,
         allow_empty=allow_empty,
         save_raw=save_raw,

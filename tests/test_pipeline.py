@@ -1,5 +1,7 @@
 """Pipeline behaviour: no silent placeholder scores, retries, chunking (offline)."""
 
+import re
+import threading
 from pathlib import Path
 
 import pytest
@@ -25,18 +27,84 @@ VALID_DOC = (
     "</measure></part></score-partwise>"
 )
 
+#: Second fragment flavour: three measures, C–E–G (see ``_height_keyed`` fake).
+TALL_DOC = (
+    '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="3.1">'
+    '<part-list><score-part id="P1"><part-name>Viola</part-name></score-part></part-list>'
+    '<part id="P1"><measure number="1"><attributes><divisions>4</divisions>'
+    "<clef><sign>C</sign><line>3</line></clef></attributes>"
+    "<note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration></note>"
+    "</measure><measure number='2'>"
+    "<note><pitch><step>E</step><octave>4</octave></pitch><duration>4</duration></note>"
+    "</measure><measure number='3'>"
+    "<note><pitch><step>G</step><octave>4</octave></pitch><duration>4</duration></note>"
+    "</measure></part></score-partwise>"
+)
+
+
+def _height_keyed(name: str) -> type[AbstractProvider]:
+    """Provider answering by crop height: compact lines → D–F, tall → C–E–G.
+
+    Keying on the image (not call order) keeps answers deterministic even when
+    requests run concurrently.
+    """
+
+    lock = threading.Lock()
+
+    def complete_text(self, prompt, images, temperature=0.0):
+        cls = type(self)
+        with lock:
+            cls.calls += 1
+        self.last_truncated = False
+        return TALL_DOC if images[0].height > 95 else VALID_DOC
+
+    def image_to_musicxml(self, images):  # pragma: no cover - pipeline uses complete_text
+        return ConversionResult(musicxml=VALID_DOC, provider=name)
+
+    cls = type(
+        f"FakeProvider_{name.replace('-', '_')}",
+        (AbstractProvider,),
+        {
+            "name": name,
+            "calls": 0,
+            "complete_text": complete_text,
+            "image_to_musicxml": image_to_musicxml,
+        },
+    )
+    register_provider(cls)
+    return cls
+
+
+def _three_system_image() -> Image.Image:
+    """Compact / tall / compact staff systems → detectable as three boxes.
+
+    The tall line spacing stays ≤ 12 px: ``find_systems`` merges ink bands
+    separated by at most ``0.018 * height`` (= 10 px here) blank rows.
+    """
+    img = Image.new("RGB", (800, 600), "white")
+    draw = ImageDraw.Draw(img)
+    for top, gap in ((80, 6), (260, 12), (470, 6)):
+        for line in range(5):
+            y = top + line * gap
+            draw.line([(40, y), (760, y)], fill="black", width=2)
+    return img
+
 
 def _provider(name: str, answers: list[str]) -> type[AbstractProvider]:
     """Register a provider that walks through ``answers`` (last one repeats).
 
     Built via ``type()`` so ``register_provider`` sees the intended name and
-    per-class call counter.
+    per-class call counter. The lock keeps the counter atomic: with --jobs > 1
+    several worker threads call ``complete_text`` concurrently.
     """
+
+    lock = threading.Lock()
 
     def complete_text(self, prompt, images, temperature=0.0):
         cls = type(self)
-        idx = min(cls.calls, len(answers) - 1)
-        cls.calls += 1
+        with lock:
+            idx = min(cls.calls, len(answers) - 1)
+            cls.calls += 1
         self.last_truncated = False
         return answers[idx]
 
@@ -209,3 +277,32 @@ def test_provider_config_carries_max_tokens():
     cfg = ProviderConfig(max_tokens=2048)
     assert cfg.max_tokens == 2048
     assert ProviderConfig().max_tokens > 0
+
+
+def _convert_three_systems(tmp_path: Path, jobs: int) -> str:
+    """Run the three-system image through convert(); return the MusicXML text."""
+    _height_keyed(f"fake-order-{jobs}")
+    src = tmp_path / f"in-{jobs}.png"
+    _three_system_image().save(src)
+    out = tmp_path / f"score-{jobs}.mscz"
+    opts = _opts(tmp_path, f"fake-order-{jobs}", chunk="system", jobs=jobs)
+    result = convert(src, out, opts)
+    assert result.stats is not None and result.stats.measures == 7
+    return result.musicxml_path.read_text(encoding="utf-8")
+
+
+def test_parallel_chunking_preserves_fragment_order(tmp_path):
+    """--jobs 4 must merge fragments in reading order, not completion order.
+
+    Compact lines answer D–F, the tall one C–E–G, so a shuffled merge shows
+    up directly in the pitch sequence.
+    """
+    xml = _convert_three_systems(tmp_path, jobs=4)
+    assert re.findall(r"<step>(.)</step>", xml) == list("DFCEGDF")
+
+
+def test_parallel_and_serial_produce_identical_output(tmp_path):
+    """jobs=4 and jobs=1 must yield byte-identical MusicXML."""
+    serial = _convert_three_systems(tmp_path, jobs=1)
+    parallel = _convert_three_systems(tmp_path, jobs=4)
+    assert serial == parallel

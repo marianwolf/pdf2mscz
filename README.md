@@ -97,6 +97,12 @@ A run only succeeds if the result actually contains music:
   so each answer is small enough to fit the model's output budget;
   `--chunk page` restores one request per page. Detected staff lines also give
   a barline estimate — getting far fewer measures back triggers a warning.
+- Those staff-line requests run **in parallel**: up to `--jobs 4` at a time
+  (the first line still runs alone, so the remaining prompts carry its
+  established `<attributes>`). Use `--jobs 1` for strictly serial requests or
+  raise it (e.g. `--jobs 8`) when the API's rate limit has headroom. Merged
+  output is identical regardless of `--jobs`; `--preprocess` pages are
+  processed in parallel too.
 - `--max-tokens` (default 8192, `0` = server default) caps each answer, and
   hitting that cap is reported instead of silently truncating the score.
 - `--allow-empty` opts back into writing a placeholder score (with a warning).
@@ -104,6 +110,9 @@ A run only succeeds if the result actually contains music:
 ```bash
 # Transcribe per staff line, repair twice, keep the raw answers
 pdf2mscz convert scan.pdf score.mscz --provider nvidia --retry 2
+
+# Eight parallel staff-line requests (when the rate limit allows it)
+pdf2mscz convert scan.pdf score.mscz --provider openai --jobs 8
 
 # One request per page, higher output cap
 pdf2mscz convert scan.pdf score.mscz --provider openai --chunk page --max-tokens 16000

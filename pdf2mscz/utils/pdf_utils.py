@@ -65,12 +65,21 @@ def pdf_to_images(path: Path, pages: list[int] | None = None, dpi: int = 300) ->
         doc.close()
 
 
-def load_images(path: Path, pages: list[int] | None = None, dpi: int = 300) -> list[Image.Image]:
-    """Load a PDF or a single image file as a list of PIL images."""
+def load_images(
+    path: Path,
+    pages: list[int] | None = None,
+    dpi: int = 300,
+    total: int | None = None,
+) -> list[Image.Image]:
+    """Load a PDF or a single image file as a list of PIL images.
+
+    ``total`` passes a known page count so the PDF is not opened twice just
+    to count its pages.
+    """
     suffix = path.suffix.lower()
     if suffix == ".pdf":
-        total = pdf_page_count(path)
-        idx = list(range(total)) if pages is None else [i for i in pages if 0 <= i < total]
+        n = total if total is not None else pdf_page_count(path)
+        idx = list(range(n)) if pages is None else [i for i in pages if 0 <= i < n]
         return pdf_to_images(path, idx, dpi=dpi)
     if suffix in IMAGE_SUFFIXES:
         return [Image.open(path).convert("RGB")]
