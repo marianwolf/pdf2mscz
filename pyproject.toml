@@ -27,17 +27,17 @@ classifiers = [
 # provider modules import their SDK lazily and raise a friendly
 # "pip install pdf2mscz[<extra>]" error when it's missing.
 dependencies = [
-  "typer>=0.9",
-  "pydantic>=2.0",
-  "pypdfium2>=4.0",
-  "pillow>=10.0",
+  "typer>=0.27.3",
+  "pydantic>=2.14.1",
+  "pypdfium2>=5.14.0",
+  "pillow>=13.0.0",
   # OpenCV 5 changed cv2.HoughLinesP to return (N, 4) instead of (N, 1, 4),
   # which crashes oemer's bbox.find_lines with "invalid index to scalar variable".
-  "opencv-python>=4.8,<5",
-  "numpy>=1.24",
-  "lxml>=5.0",
-  "python-dotenv>=1.0",
-  "httpx>=0.25",
+  "opencv-python>=4.8.1.78,<5",
+  "numpy>=2.5.4",
+  "lxml>=6.1.3",
+  "python-dotenv>=1.2.4",
+  "httpx>=0.28.1",
 ]
 
 [project.optional-dependencies]

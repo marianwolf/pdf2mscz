@@ -13,7 +13,7 @@ from pdf2mscz.pipeline import ConversionOptions, convert
 from pdf2mscz.utils.musescore_cli import find_musescore_command
 
 load_dotenv()
-app = typer.Typer(add_completion=False, help="PDF/PNG/JPG sheet music → MusicXML/.mscz")
+app = typer.Typer(help="PDF/PNG/JPG sheet music → MusicXML/.mscz")
 
 
 def _resolve_key(provider: str, cli_key: str | None) -> str | None:

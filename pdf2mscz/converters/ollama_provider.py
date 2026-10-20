@@ -42,7 +42,7 @@ class OllamaProvider(AbstractProvider):
                 "messages": [{"role": "user", "content": content}],
                 "temperature": self.config.temperature,
             },
-            timeout=self.config.timeout,
+            timeout=httpx.Timeout(self.config.timeout),
         )
         r.raise_for_status()
         text = r.json()["choices"][0]["message"]["content"].strip()

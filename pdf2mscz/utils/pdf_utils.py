@@ -41,7 +41,7 @@ def parse_pages(spec: str | None, total: int) -> list[int]:
 def pdf_page_count(path: Path) -> int:
     import pypdfium2 as pdfium
 
-    doc = pdfium.PdfDocument(str(path))
+    doc = pdfium.PdfDocument(path)
     try:
         return len(doc)
     finally:
@@ -52,7 +52,7 @@ def pdf_to_images(path: Path, pages: list[int] | None = None, dpi: int = 300) ->
     """Render PDF pages to PIL images at ``dpi``."""
     import pypdfium2 as pdfium
 
-    scale = dpi / 72.0
+    scale = dpi // 72
     doc = pdfium.PdfDocument(str(path))
     try:
         idx = list(range(len(doc))) if pages is None else pages

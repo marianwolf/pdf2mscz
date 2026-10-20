@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import ClassVar
 
 from PIL import Image
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ConversionResult(BaseModel):
@@ -21,7 +21,7 @@ class ConversionResult(BaseModel):
 class ProviderConfig(BaseModel):
     """Common knobs passed to every provider."""
 
-    model_config = {"extra": "allow"}
+    model_config = ConfigDict(extra="allow")
 
     model: str = ""
     api_key: str | None = None

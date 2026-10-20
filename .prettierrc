@@ -1,0 +1,16 @@
+{
+    "printWidth": 120,
+    "proseWrap": "never",
+    "semi": false,
+    "singleQuote": true,
+    "tabWidth": 4,
+    "trailingComma": "es5",
+    "overrides": [
+        {
+            "files": "*.{json,md,yml,yaml,toml}",
+            "options": {
+                "tabWidth": 2
+            }
+        }
+    ]
+}
