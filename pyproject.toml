@@ -68,6 +68,15 @@ exclude = ["/.kilo"]
 target-version = "py310"
 line-length = 100
 
+# Formatting rules for .py files — the Python counterpart to .prettierrc.
+# Prettier itself has no Python support, so `ruff format` (Black-compatible)
+# is used for Python while Prettier handles everything else. Run both via
+# `npm run format` / `npm run lint`.
+[tool.ruff.format]
+indent-style = "space"  # 4 spaces, matching .prettierrc tabWidth
+quote-style = "double" # Python convention (prettier singleQuote applies to JS/CSS only)
+line-ending = "auto"
+
 [tool.ruff.lint.per-file-ignores]
 "pdf2mscz/cli.py" = ["B008", "BLE001"]
 "pdf2mscz/utils/xml_sanitizer.py" = ["BLE001", "S110"]

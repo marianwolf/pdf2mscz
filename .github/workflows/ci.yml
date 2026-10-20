@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ['3.10', '3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,7 +19,9 @@ jobs:
         run: |
           pip install -e ".[dev,openai,anthropic,gemini,nvidia]"
       - name: Lint
-        run: ruff check pdf2mscz tests
+        run: |
+          ruff check pdf2mscz tests
+          ruff format --check pdf2mscz tests
       - name: Typecheck
         run: mypy pdf2mscz || true
       - name: Tests

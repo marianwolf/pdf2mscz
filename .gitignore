@@ -13,3 +13,4 @@ build/
 *.musicxml
 *.pdf
 out/
+node_modules/

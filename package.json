@@ -1,0 +1,13 @@
+{
+  "scripts": {
+    "format": "prettier --write . && ruff format .",
+    "lint": "prettier --check . && ruff format --check ."
+  },
+  "devDependencies": {
+    "@opencode/cli": "^2.1.1",
+    "prettier": "^3.9.10"
+  },
+  "allowScripts": {
+    "@opencode/cli@2.1.1": true
+  }
+}
